@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>♥ 心动日记</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(1300px 900px at 50% 42%,#141b30 0%,#0a0e1c 48%,#04060c 100%);
+    color:#e8ecf6;user-select:none;-webkit-user-select:none;
+  }
+  #stage{position:fixed;inset:0;overflow:hidden}
+  /* ---------- 弹窗卡片 ---------- */
+  .card{position:absolute;border-radius:11px;overflow:hidden;cursor:pointer;
+    transform:rotate(var(--r,0deg));
+    box-shadow:3px 3px 0 var(--l2),6px 6px 0 var(--l1),12px 14px 26px rgba(0,0,0,.4);
+    will-change:transform,opacity}
+  .card .in{background:var(--soft);animation:pop .5s cubic-bezier(.16,1.35,.4,1) both}
+  .card.drift .in{animation:pop .5s cubic-bezier(.16,1.35,.4,1) both,
+    float var(--fd,7s) ease-in-out calc(1.2s + var(--fdd,0s)) infinite alternate}
+  @keyframes pop{
+    0%{transform:scale(.12) translateY(16px);opacity:0}
+    62%{transform:scale(1.07) translateY(-3px);opacity:1}
+    100%{transform:scale(1) translateY(0);opacity:1}
+  }
+  @keyframes float{from{transform:translateY(0)}to{transform:translateY(-7px)}}
+  .card .bar{height:20px;display:flex;align-items:center;gap:6px;padding:0 9px;
+    background:var(--strong);font-size:10.5px;color:rgba(255,255,255,.94);letter-spacing:.5px}
+  .card .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 6px rgba(255,255,255,.6)}
+  .card .txt{padding:8px 11px 9px;color:#1c2434;font-size:var(--fs,12.5px);line-height:1.6;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--lines,3);overflow:hidden;
+    white-space:pre-wrap;word-break:break-word}
+  .card .more{display:none;padding:3px 11px 6px;font-size:10.5px;color:#77809b;text-align:right}
+  .card.clamped .more{display:block}
+  /* ---------- 开场提示 ---------- */
+  #hint{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    cursor:pointer;transition:opacity .7s;
+    background:radial-gradient(640px 440px at 50% 46%,rgba(4,6,12,0) 0%,rgba(4,6,12,.6) 100%)}
+  #hint.gone{opacity:0;pointer-events:none}
+  #hint .big{font-size:64px;color:#ff6fa5;text-shadow:0 0 34px rgba(255,111,165,.65);animation:beat 1.4s ease-in-out infinite}
+  @keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.14)}24%{transform:scale(1)}36%{transform:scale(1.09)}}
+  #hint .t1{font-size:17px;letter-spacing:6px;color:#dfe5f2}
+  #hint .t2{font-size:12.5px;letter-spacing:2px;color:#7d869e;margin-top:4px}
+  /* ---------- 角落工具 ---------- */
+  #toolbar{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;gap:9px;opacity:.15;transition:opacity .35s}
+  #toolbar:hover{opacity:1}
+  #toolbar button{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.16);
+    background:rgba(18,24,42,.8);color:#c9d2e8;font-size:16px;cursor:pointer;backdrop-filter:blur(8px)}
+  #toolbar button:hover{border-color:#ff6fa5;color:#ff9cc0}
+  /* ---------- 弹层 ---------- */
+  .modal{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+    background:rgba(3,5,11,.66);backdrop-filter:blur(5px)}
+  .modal.hidden{display:none}
+  .panel{width:min(580px,92vw);max-height:84vh;overflow:auto;background:#111830;border:1px solid rgba(255,255,255,.1);
+    border-radius:18px;padding:24px 26px;box-shadow:0 32px 90px rgba(0,0,0,.65);user-select:text;-webkit-user-select:text}
+  .panel h2{font-size:17px;color:#ffb9d2;margin-bottom:14px;letter-spacing:2px}
+  .panel textarea{width:100%;min-height:110px;resize:vertical;background:#0b101f;border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;color:#e8ecf6;padding:12px;font:inherit;font-size:14.5px;line-height:1.7}
+  .panel textarea:focus{outline:none;border-color:#ff6fa5}
+  .row{display:flex;align-items:center;gap:10px;margin-top:12px}
+  #wCount{font-size:12px;color:#7d869e}
+  #wCount.warn{color:#ffb35c}
+  #wCount.over{color:#ff7a7a}
+  .btn{border:none;border-radius:9px;padding:9px 18px;font:inherit;font-size:13.5px;cursor:pointer}
+  .btn.pri{background:linear-gradient(135deg,#ff5f9e,#ff8a5f);color:#fff}
+  .btn.pri:hover{filter:brightness(1.12)}
+  .btn.sec{background:transparent;border:1px solid rgba(255,255,255,.2);color:#aeb7cf}
+  .btn.sec:hover{border-color:#ff6fa5;color:#ffb9d2}
+  .grow{flex:1}
+  #wList{margin-top:18px;display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;gap:10px;align-items:flex-start;background:#0b101f;border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;padding:9px 12px}
+  .item .d{flex:none;font-size:11.5px;color:#8f9ab5;padding-top:2px;min-width:54px}
+  .item .x{flex:1;font-size:13px;color:#cdd5e8;line-height:1.55;white-space:pre-wrap;word-break:break-word;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .item .del{flex:none;border:none;background:transparent;color:#5c6580;cursor:pointer;font-size:12px;padding:2px 4px}
+  .item .del:hover{color:#ff7a7a}
+  .hr{height:1px;background:rgba(255,255,255,.09);margin:20px 0 16px}
+  .note{font-size:12px;color:#7d869e;line-height:1.7;margin-top:8px}
+  /* ---------- 阅读弹层 ---------- */
+  #reader .panel{width:min(540px,90vw)}
+  #rDate{font-size:12px;color:#ff8ab5;letter-spacing:2px;margin-bottom:10px}
+  #rText{font-size:16.5px;line-height:1.9;color:#e9edf8;white-space:pre-wrap;word-break:break-word;max-height:60vh;overflow:auto}
+  /* ---------- 空池提示 / toast ---------- */
+  #emptyTip{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:40;text-align:center;
+    color:#8b93a8;font-size:14px;letter-spacing:2px;line-height:2.1;display:none}
+  #toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%) translateY(8px);z-index:99;
+    background:rgba(18,24,42,.92);border:1px solid rgba(255,111,165,.4);color:#ffd7e6;font-size:13px;
+    padding:10px 20px;border-radius:99px;opacity:0;transition:.4s;pointer-events:none;letter-spacing:1px}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="emptyTip">池子还空空的<br>按 W 或点右下角 ✎ 写下第一句吧</div>
+<div id="hint">
+  <div class="big">♥</div>
+  <div class="t1">点 击 任 意 处 开 启</div>
+  <div class="t2" id="hintSub">按 W 或点右下角 ✎ 写日记</div>
+</div>
+<div id="toolbar">
+  <button id="btnWrite" title="写日记 (W)">✎</button>
+  <button id="btnFull" title="全屏">⛶</button>
+</div>
+
+<div id="writer" class="modal hidden">
+  <div class="panel">
+    <h2>✎ 写日记</h2>
+    <textarea id="wText" maxlength="600" placeholder="今天想说什么，就写什么……"></textarea>
+    <div class="row">
+      <span id="wCount">0 字 · 建议 160 字内</span>
+      <span class="grow"></span>
+      <button class="btn sec" id="wClose">收起</button>
+      <button class="btn pri" id="wSave">投入池子 ♥</button>
+    </div>
+    <div id="wList"></div>
+    <div class="hr"></div>
+    <div class="row" style="margin-top:0">
+      <span class="grow"></span>
+      <button class="btn sec" id="wShare">生成分享版 ↗</button>
+    </div>
+    <div class="note">「分享版」会把此刻池子里的全部日记打包成一个新网页文件（.html）。把它发给别人，对方双击打开就能看到爱心动画和这些日记——分享版是纯观看版，不含写作按钮。</div>
+  </div>
+</div>
+
+<div id="reader" class="modal hidden">
+  <div class="panel">
+    <div id="rDate"></div>
+    <div id="rText"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script id="app">
+(function(){
+'use strict';
+
+/* ================= 日记池 ================= */
+var KEY='heartDiary.pool.v1';
+var SHARE=Array.isArray(window.EMBEDDED_ENTRIES);   // 分享版：日记已打包进文件
+var pool=[];
+try{
+  if(SHARE) pool=window.EMBEDDED_ENTRIES.slice();
+  else pool=JSON.parse(localStorage.getItem(KEY)||'[]');
+}catch(e){ pool=SHARE?window.EMBEDDED_ENTRIES.slice():[]; }
+
+function persist(){
+  if(SHARE) return;
+  try{ localStorage.setItem(KEY,JSON.stringify(pool)); }
+  catch(e){ toast('⚠ 当前浏览器不支持本地存储，日记不会被记住（建议用 Edge/Chrome 打开）'); }
+}
+function addEntry(text){
+  var e={id:Date.now()+''+Math.floor(Math.random()*1e4),ts:Date.now(),text:text};
+  pool.unshift(e); persist(); return e;
+}
+function removeEntry(id){
+  pool=pool.filter(function(e){return e.id!==id}); persist();
+}
+function fmtDate(ts){
+  var d=new Date(ts);
+  return (d.getMonth()+1)+'月'+d.getDate()+'日';
+}
+function fmtTime(ts){
+  var d=new Date(ts),p=function(n){return (n<10?'0':'')+n};
+  return fmtDate(ts)+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* ================= 元素 ================= */
+var stage=document.getElementById('stage');
+var hint=document.getElementById('hint');
+var hintSub=document.getElementById('hintSub');
+var toolbar=document.getElementById('toolbar');
+var btnWrite=document.getElementById('btnWrite');
+var btnFull=document.getElementById('btnFull');
+var writer=document.getElementById('writer');
+var reader=document.getElementById('reader');
+var wText=document.getElementById('wText');
+var wCount=document.getElementById('wCount');
+var wList=document.getElementById('wList');
+var emptyTip=document.getElementById('emptyTip');
+var toastEl=document.getElementById('toast');
+var rDate=document.getElementById('rDate');
+var rText=document.getElementById('rText');
+
+/* ================= 配色（粉/蓝/绿/青/紫 糖果色系） ================= */
+var COLORS=[
+  {strong:'#3f9df0',soft:'#e9f4ff',l1:'#2a76c4',l2:'#7cc0ff'},
+  {strong:'#ff5f9e',soft:'#ffeff6',l1:'#d64585',l2:'#ff9ec6'},
+  {strong:'#2fc46f',soft:'#eafbf1',l1:'#1f9a55',l2:'#74e3a3'},
+  {strong:'#2fc9cc',soft:'#e9fbfb',l1:'#1fa3a6',l2:'#79e7e9'},
+  {strong:'#8f7bff',soft:'#f1efff',l1:'#6f5be0',l2:'#b6a9ff'}
+];
+
+/* ================= 弹窗卡片 ================= */
+var heartSet=new Set(), ambientSet=new Set();
+var recentPts=[];
+
+function pickPos(w,h){
+  // 简单避让：尽量不和最近出现过的卡片太贴近
+  for(var t=0;t<10;t++){
+    var x=w/2+8+Math.random()*(innerWidth-w-16);
+    var y=h/2+8+Math.random()*(innerHeight-h-16);
+    var ok=true;
+    for(var i=0;i<recentPts.length;i++){
+      var p=recentPts[i];
+      if(Math.abs(p.x-x)<w*0.8 && Math.abs(p.y-y)<h*0.8){ok=false;break;}
+    }
+    if(ok) break;
+  }
+  recentPts.push({x:x,y:y});
+  if(recentPts.length>70) recentPts.shift();
+  return {x:x,y:y};
+}
+
+function textTier(len,small){
+  // 依据字数自适应字号与折叠行数，保证短句醒目、长文可折叠
+  var fs,lines;
+  if(small){ fs=len<=26?11.5:(len<=64?11:10.5); lines=2; }
+  else{
+    if(len<=24){fs=13;lines=3;}
+    else if(len<=60){fs=12.5;lines=4;}
+    else if(len<=110){fs=12;lines=4;}
+    else if(len<=180){fs=11.5;lines=5;}
+    else{fs=11;lines=6;}
+  }
+  return {fs:fs,lines:lines};
+}
+
+function makeCard(entry,x,y,opts){
+  opts=opts||{};
+  var w=opts.w||150+Math.random()*50;
+  var c=pick(COLORS);
+  var len=(entry.text||'').length;
+  var tier=textTier(len,!!opts.small);
+
+  var el=document.createElement('div');
+  el.className='card'+(opts.small?'':' drift');
+  el.style.left=(x-w/2)+'px';
+  el.style.top=(y-30)+'px';
+  el.style.width=w+'px';
+  el.style.setProperty('--r',((Math.random()*2-1)*(opts.small?1.6:4)).toFixed(2)+'deg');
+  el.style.setProperty('--strong',c.strong);
+  el.style.setProperty('--soft',c.soft);
+  el.style.setProperty('--l1',c.l1);
+  el.style.setProperty('--l2',c.l2);
+  el.style.setProperty('--fs',tier.fs+'px');
+  el.style.setProperty('--lines',tier.lines);
+  if(!opts.small){
+    el.style.setProperty('--fd',(6+Math.random()*3.5).toFixed(2)+'s');
+    el.style.setProperty('--fdd',(Math.random()*2).toFixed(2)+'s');
+  }
+
+  var inn=document.createElement('div'); inn.className='in';
+  var bar=document.createElement('div'); bar.className='bar';
+  var dot=document.createElement('span'); dot.className='dot';
+  var date=document.createElement('span'); date.textContent=fmtDate(entry.ts);
+  bar.appendChild(dot); bar.appendChild(date);
+  var txt=document.createElement('div'); txt.className='txt'; txt.textContent=entry.text;
+  var more=document.createElement('div'); more.className='more'; more.textContent='点击展开 ▾';
+  inn.appendChild(bar); inn.appendChild(txt); inn.appendChild(more);
+  el.appendChild(inn);
+
+  el.addEventListener('click',function(ev){
+    ev.stopPropagation();
+    openReader(entry);
+  });
+  // 内容溢出时显示“点击展开”
+  setTimeout(function(){
+    if(txt.scrollHeight>txt.clientHeight+3) el.classList.add('clamped');
+  },60);
+
+  stage.appendChild(el);
+  (opts.set||ambientSet).add(el);
+  return el;
+}
+
+function flyAway(el,dx,dy,rot,dur,delay){
+  el.style.transition='transform '+dur+'ms cubic-bezier(.35,.1,.6,1) '+delay+'ms,opacity '+dur+'ms ease '+delay+'ms';
+  el.style.transform='translate('+dx+'px,'+dy+'px) rotate('+rot+'deg) scale(.4)';
+  el.style.opacity='0';
+  setTimeout(function(){
+    if(el.parentNode) el.parentNode.removeChild(el);
+    heartSet.delete(el); ambientSet.delete(el);
+  },dur+delay+120);
+}
+function fadeOut(el,dur){
+  el.style.transition='transform '+dur+'ms ease,opacity '+dur+'ms ease';
+  el.style.transform='translateY(-10px) scale(.82)';
+  el.style.opacity='0';
+  setTimeout(function(){
+    if(el.parentNode) el.parentNode.removeChild(el);
+    ambientSet.delete(el);
+  },dur+120);
+}
+
+/* ================= 阶段一：动态画爱心 ================= */
+function computeHeart(){
+  var span=Math.min(innerWidth*0.62,innerHeight*0.78);   // 爱心宽度
+  var step=span/11.5;                                     // 卡片间距（密集堆叠）
+  var s=span/2.7;                                         // 世界坐标 -> 屏幕
+  var cx=innerWidth/2, baseY=innerHeight*0.47;
+  function f(x,y){var a=x*x+y*y-1;return a*a*a-x*x*y*y*y;}
+  function inside(x,y){return f(x+(Math.random()*.05-.025),y+(Math.random()*.05-.025))<=0;}
+  var outline=[],inner=[],sw=step/s;
+  for(var wy=1.32;wy>=-1.22;wy-=sw){
+    for(var wx=-1.36;wx<=1.36;wx+=sw){
+      if(!inside(wx,wy)) continue;
+      var edge=!inside(wx+sw,wy)||!inside(wx-sw,wy)||!inside(wx,wy+sw)||!inside(wx,wy-sw);
+      var pt={x:cx+wx*s,y:baseY-wy*s};
+      (edge?outline:inner).push(pt);
+    }
+  }
+  function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t;}return a;}
+  return shuffle(outline).concat(shuffle(inner));
+}
+
+function startHeartPhase(){
+  if(pool.length===0) emptyTip.style.display='block';
+  var cells=computeHeart();
+  var cardW=cells.length?Math.max(64,(innerWidth/11.5)*1.42):80;
+  var i=0;
+  (function next(){
+    if(i>=cells.length){ setTimeout(scatterPhase,800); return; }
+    var pt=cells[i++];
+    var entry=pool.length?pick(pool):{ts:Date.now(),text:'……'};
+    var el=makeCard(entry,pt.x,pt.y,{small:true,w:cardW*(0.9+Math.random()*0.2),set:heartSet});
+    setTimeout(next,46+Math.random()*26);
+  })();
+}
+
+/* ================= 阶段二：散开 + 持续涌现 ================= */
+function scatterPhase(){
+  var cx=innerWidth/2, cy=innerHeight/2;
+  heartSet.forEach(function(el){
+    var r=el.getBoundingClientRect();
+    var dx=r.left+r.width/2-cx, dy=r.top+r.height/2-cy;
+    var d=Math.max(60,Math.hypot(dx,dy));
+    var ang=Math.atan2(dy,dx)+(Math.random()*.9-.45);
+    var dist=(0.35+Math.random()*0.5)*Math.max(innerWidth,innerHeight)*0.6;
+    flyAway(el,Math.cos(ang)*dist,Math.sin(ang)*dist,(Math.random()*80-40),850+Math.random()*350,Math.random()*260);
+  });
+  setTimeout(startAmbient,900);
+}
+
+function maxAmbient(){
+  return Math.max(22,Math.min(60,Math.round(innerWidth*innerHeight/27000)));
+}
+function startAmbient(){
+  emptyTip.style.display=pool.length===0?'block':'none';
+  (function loop(){
+    if(ambientSet.size<maxAmbient() && pool.length>0){
+      var entry=pick(pool);
+      var w=150+Math.random()*50;
+      var pos=pickPos(w,120);
+      var el=makeCard(entry,pos.x,pos.y,{w:w});
+      setTimeout(function(){ if(el.parentNode) fadeOut(el,650); },11000+Math.random()*7000);
+    }
+    setTimeout(loop,320+Math.random()*300);
+  })();
+}
+
+/* ================= 阅读弹层（长文完整查看） ================= */
+function openReader(entry){
+  rDate.textContent='♥ '+fmtTime(entry.ts);
+  rText.textContent=entry.text;
+  reader.classList.remove('hidden');
+}
+reader.addEventListener('click',function(){ reader.classList.add('hidden'); });
+
+/* ================= 写日记 ================= */
+function openWriter(){
+  if(SHARE) return;
+  renderList();
+  writer.classList.remove('hidden');
+  setTimeout(function(){wText.focus();},80);
+}
+function closeWriter(){ writer.classList.add('hidden'); }
+
+function renderList(){
+  wList.innerHTML='';
+  if(pool.length===0){
+    var empty=document.createElement('div');
+    empty.className='note'; empty.textContent='池子还是空的，写下第一句吧。';
+    wList.appendChild(empty); return;
+  }
+  pool.forEach(function(e){
+    var item=document.createElement('div'); item.className='item';
+    var d=document.createElement('span'); d.className='d'; d.textContent=fmtDate(e.ts);
+    var x=document.createElement('span'); x.className='x'; x.textContent=e.text;
+    var del=document.createElement('button'); del.className='del'; del.textContent='删除';
+    del.addEventListener('click',function(){
+      if(confirm('删除这篇日记？')){ removeEntry(e.id); renderList(); }
+    });
+    item.appendChild(d); item.appendChild(x); item.appendChild(del);
+    wList.appendChild(item);
+  });
+}
+
+wText.addEventListener('input',function(){
+  var n=wText.value.length;
+  wCount.textContent=n+' 字 · 建议 160 字内'+(n>160?'（弹窗会折叠，点击卡片可展开）':'');
+  wCount.className=n>300?'over':(n>160?'warn':'');
+});
+document.getElementById('wSave').addEventListener('click',function(){
+  var t=wText.value.trim();
+  if(!t){ toast('写点什么再投入池子吧 ♥'); return; }
+  addEntry(t);
+  wText.value=''; wCount.textContent='0 字 · 建议 160 字内'; wCount.className='';
+  renderList();
+  emptyTip.style.display='none';
+  toast('已投入池子 ♥');
+});
+document.getElementById('wClose').addEventListener('click',closeWriter);
+writer.addEventListener('click',function(e){ if(e.target===writer) closeWriter(); });
+
+/* ================= 分享版导出 ================= */
+function buildShareHTML(){
+  var json=JSON.stringify(pool)
+    .replace(/</g,'\\u003c')
+    .replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+  var OPEN='<scr'+'ipt>';
+  var CLOSE='<\/scr'+'ipt>';
+  var inject=OPEN+'window.EMBEDDED_ENTRIES='+json+';'+CLOSE;
+  var html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  var mark='<scr'+'ipt id="app">';
+  var i=html.indexOf(mark);
+  if(i<0) i=html.indexOf('<scr'+'ipt');
+  html=html.slice(0,i)+inject+html.slice(i);
+  return html;
+}
+document.getElementById('wShare').addEventListener('click',function(){
+  if(pool.length===0){ toast('池子是空的，先写几篇再分享吧'); return; }
+  var blob=new Blob([buildShareHTML()],{type:'text/html;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='心动日记·分享版.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('分享版已生成 ♥ 发送这个文件，对方双击就能看');
+});
+
+/* ================= 全屏 / 提示 / 快捷键 ================= */
+function toggleFull(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(function(){});
+}
+btnFull.addEventListener('click',function(e){ e.stopPropagation(); toggleFull(); });
+btnWrite.addEventListener('click',function(e){ e.stopPropagation(); openWriter(); });
+
+var started=false;
+function begin(){
+  if(hint.classList.contains('gone')) return;
+  hint.classList.add('gone');
+  document.documentElement.requestFullscreen().catch(function(){});
+}
+hint.addEventListener('click',begin);
+
+stage.addEventListener('click',function(e){
+  if(e.target.closest('.card')) return;
+  if(pool.length===0) return;
+  var entry=pick(pool);
+  var w=150+Math.random()*50;
+  makeCard(entry,e.clientX,e.clientY,{w:w});
+});
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    if(!reader.classList.contains('hidden')) reader.classList.add('hidden');
+    else if(!writer.classList.contains('hidden')) writer.classList.add('hidden');
+    return;
+  }
+  var typing=/^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName);
+  if(typing) return;
+  if((e.key==='w'||e.key==='W')&&!SHARE) openWriter();
+});
+
+/* ================= toast ================= */
+var toastTimer=null;
+function toast(msg){
+  toastEl.textContent=msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){toastEl.classList.remove('show');},2600);
+}
+
+/* ================= 启动 ================= */
+function init(){
+  // 复位运行时状态（分享版加载时也可能带着旧 DOM，统一清空重建）
+  stage.innerHTML='';
+  writer.classList.add('hidden');
+  reader.classList.add('hidden');
+  hint.classList.remove('gone');
+  emptyTip.style.display='none';
+  if(SHARE){
+    btnWrite.style.display='none';
+    hintSub.textContent='这份心意来自你超超超级好的朋友 ♥';
+  }
+  startHeartPhase();
+}
+init();
+
+/* 测试钩子（不影响正常使用） */
+window.__buildShareHTML=buildShareHTML;
+window.__pool=function(){return pool};
+})();
+</script>
+</body>
+</html>
